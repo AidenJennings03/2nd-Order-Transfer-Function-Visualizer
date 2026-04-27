@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Second-Order Transfer Function Visualizer</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Second-Order Transfer Function Visualizer</h1>
+    <span id="tf-display">H(s) = ω₀² / (s² + 2ζω₀s + ω₀²)</span>
+  </header>
+
+  <div id="main-layout">
+    <!-- 3D Panel -->
+    <div id="panel-3d">
+      <div id="canvas-container">
+        <canvas id="three-canvas"></canvas>
+        <div id="surface-legend">
+          <span class="legend-item"><span class="legend-color" style="background:#00ffcc"></span>jω axis</span>
+          <span class="legend-item"><span class="legend-color" style="background:#ff4444"></span>Poles</span>
+          <span class="legend-item"><span class="legend-color" style="background:#ffff00"></span>Current ω</span>
+        </div>
+      </div>
+      <div id="overlay-toggles">
+        <label><input type="checkbox" id="toggle-pole-lines"> Pole-distance lines</label>
+        <label><input type="checkbox" id="toggle-phase-angles"> Phase angle lines</label>
+        <label><input type="checkbox" id="toggle-phase-color"> Phase-colored surface</label>
+        <label><input type="checkbox" id="toggle-step-response" checked> Step response</label>
+        <button id="btn-reset-camera" style="margin-left:auto">⟳ Reset Camera</button>
+      </div>
+    </div>
+
+    <!-- Bode + Step Response Panel -->
+    <div id="panel-bode">
+      <div id="plot-magnitude"></div>
+      <div id="plot-phase"></div>
+      <div id="plot-step"></div>
+    </div>
+  </div>
+
+  <!-- Controls Bar -->
+  <div id="controls-bar">
+    <div class="control-group">
+      <label>ζ (damping ratio)
+        <span class="readout" id="zeta-readout">0.500</span>
+      </label>
+      <input type="range" id="zeta-slider" min="-4.605" max="0.693" step="0.001" value="-0.693">
+      <!-- log scale: value = ln(zeta), displayed = e^value -->
+    </div>
+    <div class="control-group">
+      <label>ω₀ (rad/s)
+        <span class="readout" id="omega0-readout">1.000</span>
+      </label>
+      <input type="range" id="omega0-slider" min="-2.303" max="4.605" step="0.001" value="0">
+      <!-- log scale -->
+    </div>
+    <div class="control-group">
+      <label>ω sweep
+        <span class="readout" id="omega-sweep-readout">1.000</span>
+      </label>
+      <input type="range" id="omega-sweep-slider" min="0" max="1" step="0.001" value="0.5">
+      <button id="btn-autoplay">▶ Play</button>
+    </div>
+    <div class="control-group" id="presets-group">
+      <span>Presets:</span>
+      <button class="preset-btn" data-zeta="0.1" data-omega="1">Underdamped</button>
+      <button class="preset-btn" data-zeta="1.0" data-omega="1">Critically Damped</button>
+      <button class="preset-btn" data-zeta="2.0" data-omega="1">Overdamped</button>
+      <button class="preset-btn" data-zeta="0.079" data-omega="3.1623">ECE 100 P3d</button>
+    </div>
+    <div class="control-group" id="readouts-group">
+      <div class="readout-block">
+        <div>Poles: <span id="pole-readout">—</span></div>
+        <div>Mp: <span id="mp-readout">—</span> dB</div>
+        <div>Q: <span id="q-readout">—</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
