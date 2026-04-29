@@ -51,11 +51,9 @@
       <!-- log scale: value = ln(zeta), displayed = e^value -->
     </div>
     <div class="control-group">
-      <label>ω₀ (rad/s)
-        <span class="readout" id="omega0-readout">1.000</span>
-      </label>
+      <label>ω₀ <span class="readout" id="omega0-readout">1.00</span> <span style="color:var(--muted);font-size:10px">rad/s</span></label>
       <input type="range" id="omega0-slider" min="-2.303" max="4.605" step="0.001" value="0">
-      <!-- log scale -->
+      <!-- log scale: slider value = ln(ω₀), range 0.1–100 rad/s -->
     </div>
     <div class="control-group">
       <label>ω sweep

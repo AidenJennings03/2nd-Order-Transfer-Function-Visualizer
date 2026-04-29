@@ -75,7 +75,7 @@ function initThree() {
   const container = document.getElementById('canvas-container');
   const w = container.clientWidth, h = container.clientHeight;
   camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 10000);
-  camera.position.set(0, -6, 4);
+  camera.position.set(-1.25, -7, 4.5);
   camera.up.set(0, 0, 1);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -118,15 +118,13 @@ function onResize() {
 let surfaceGeo, surfaceMat;
 
 function getSurfaceBounds() {
-  const { zeta, omega0 } = state;
-  // Extend left bound to always contain both poles
-  let leftExtent = 2.5;
+  // Returns normalized bounds (sigma/omega0, omega/omega0) — fixed world-space, ω₀-invariant.
+  const { zeta } = state;
+  let leftExtent = 3.0;
   if (zeta >= 1) {
-    leftExtent = Math.max(2.5, zeta + Math.sqrt(zeta * zeta - 1) + 0.8);
+    leftExtent = Math.max(3.0, zeta + Math.sqrt(zeta * zeta - 1) + 0.8);
   }
-  const sigMin = -leftExtent * omega0, sigMax = 0.5 * omega0;
-  const omMin = -2.5 * omega0, omMax = 2.5 * omega0;
-  return { sigMin, sigMax, omMin, omMax };
+  return { sigMin: -leftExtent, sigMax: 0.5, omMin: -2.5, omMax: 2.5 };
 }
 
 function buildSurface() {
@@ -159,27 +157,25 @@ function buildSurface() {
 }
 
 function computeSurfaceVertices(geo, sigMin, sigMax, omMin, omMax) {
+  // sigMin/sigMax/omMin/omMax are in normalized coords (sigma/omega0).
+  // World positions use these directly; evalH receives physical sigma = norm * omega0.
   const { zeta, omega0, phaseColorMode } = state;
   const pos = geo.attributes.position;
   const col = geo.attributes.color;
   const N = GRID;
 
-  // PlaneGeometry fills rows (x) and cols (y) from -0.5 to +0.5
-  // We remap to our sigma/omega grid
   for (let i = 0; i < N; i++) {
     for (let j = 0; j < N; j++) {
       const idx = i * N + j;
-      const sigma = sigMin + (sigMax - sigMin) * (j / (N - 1));
-      const omega = omMin + (omMax - omMin) * (i / (N - 1));
-      const { mag, phase } = evalH(sigma, omega, zeta, omega0);
+      const normSigma = sigMin + (sigMax - sigMin) * (j / (N - 1));
+      const normOmega = omMin + (omMax - omMin) * (i / (N - 1));
+      // Physical values for H(s) — evalH needs actual rad/s
+      const { mag, phase } = evalH(normSigma * omega0, normOmega * omega0, zeta, omega0);
       let db = isFinite(mag) && mag > 0 ? 20 * Math.log10(mag) : -60;
       db = Math.max(DB_MIN, Math.min(DB_MAX, db));
 
-      const x = sigMin + (sigMax - sigMin) * (j / (N - 1));
-      const y = omMin + (omMax - omMin) * (i / (N - 1));
       const z = dbToZ(db);
-
-      pos.setXYZ(idx, x, y, z);
+      pos.setXYZ(idx, normSigma, normOmega, z);
 
       let t;
       if (phaseColorMode) {
@@ -222,9 +218,9 @@ function buildJwAxisLine() {
   const NPTS = 400;
   const pts = [];
   for (let i = 0; i < NPTS; i++) {
-    const omega = omMin + (omMax - omMin) * (i / (NPTS - 1));
-    const db = magDB(0, omega, zeta, omega0);
-    pts.push(new THREE.Vector3(0, omega, dbToZ(db) + 0.03));
+    const normOmega = omMin + (omMax - omMin) * (i / (NPTS - 1));
+    const db = magDB(0, normOmega * omega0, zeta, omega0);
+    pts.push(new THREE.Vector3(0, normOmega, dbToZ(db) + 0.03));
   }
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const mat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 });
@@ -245,7 +241,8 @@ function buildSweepPoint() {
 function updateSweepPoint() {
   const { zeta, omega0, omegaSweep } = state;
   const db = magDB(0, omegaSweep, zeta, omega0);
-  sweepSphere.position.set(0, omegaSweep, dbToZ(db) + 0.07);
+  // World Y uses normalized coordinate omega/omega0
+  sweepSphere.position.set(0, omegaSweep / omega0, dbToZ(db) + 0.07);
 
   updateOverlayLines();
 }
@@ -255,25 +252,27 @@ function updatePoleMarkers() {
   poleMarkers.forEach(m => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
   poleMarkers = [];
 
-  const poles = poleLocations(state.zeta, state.omega0);
+  const { zeta, omega0 } = state;
+  const poles = poleLocations(zeta, omega0);
+  const zTop = dbToZ(DB_MAX);
+  const zBot = dbToZ(DB_MIN);
   poles.forEach(p => {
-    // Vertical pillar
-    const db = magDB(p.sigma, p.omega, state.zeta, state.omega0);
-    const zTop = dbToZ(Math.min(DB_MAX, 40));
-    const zBot = dbToZ(DB_MIN);
+    // Normalize pole position to world space
+    const nx = p.sigma / omega0;
+    const ny = p.omega / omega0;
+
     const geo = new THREE.CylinderGeometry(0.03, 0.03, zTop - zBot, 8);
     geo.rotateX(Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(p.sigma, p.omega, (zTop + zBot) / 2);
+    mesh.position.set(nx, ny, (zTop + zBot) / 2);
     scene.add(mesh);
     poleMarkers.push(mesh);
 
-    // Glowing sphere at top
     const sgeo = new THREE.SphereGeometry(0.07, 16, 16);
     const smat = new THREE.MeshBasicMaterial({ color: 0xff8888 });
     const sphere = new THREE.Mesh(sgeo, smat);
-    sphere.position.set(p.sigma, p.omega, zTop + 0.05);
+    sphere.position.set(nx, ny, zTop + 0.05);
     scene.add(sphere);
     poleMarkers.push(sphere);
   });
@@ -292,11 +291,13 @@ function updateOverlayLines() {
 
   const poles = poleLocations(zeta, omega0);
   const db = magDB(0, omegaSweep, zeta, omega0);
-  const pSweep = new THREE.Vector3(0, omegaSweep, dbToZ(db) + 0.07);
+  const normSweep = omegaSweep / omega0;
+  const pSweep = new THREE.Vector3(0, normSweep, dbToZ(db) + 0.07);
 
   poles.forEach((p, idx) => {
-    const poleDb = magDB(p.sigma, p.omega, zeta, omega0);
-    const pPole = new THREE.Vector3(p.sigma, p.omega, dbToZ(Math.min(DB_MAX, 40)) + 0.05);
+    const nx = p.sigma / omega0;
+    const ny = p.omega / omega0;
+    const pPole = new THREE.Vector3(nx, ny, dbToZ(DB_MAX) + 0.05);
 
     if (showPoleLines) {
       const geo = new THREE.BufferGeometry().setFromPoints([pPole, pSweep]);
@@ -307,11 +308,10 @@ function updateOverlayLines() {
     }
 
     if (showPhaseAngles) {
-      // Draw angle arc representation — just a dashed line for now
-      const midY = (p.omega + omegaSweep) / 2;
+      const midY = (ny + normSweep) / 2;
       const arcPts = [
-        new THREE.Vector3(p.sigma, p.omega, pPole.z),
-        new THREE.Vector3(p.sigma / 2, midY, (pPole.z + pSweep.z) / 2),
+        new THREE.Vector3(nx, ny, pPole.z),
+        new THREE.Vector3(nx / 2, midY, (pPole.z + pSweep.z) / 2),
         pSweep.clone(),
       ];
       const geo = new THREE.BufferGeometry().setFromPoints(arcPts);
@@ -598,7 +598,7 @@ function updateStepPlot() {
 function updateReadouts() {
   const { zeta, omega0 } = state;
   document.getElementById('zeta-readout').textContent = zeta.toFixed(3);
-  document.getElementById('omega0-readout').textContent = omega0.toFixed(3);
+  document.getElementById('omega0-readout').textContent = omega0 >= 10 ? omega0.toFixed(1) : omega0.toFixed(3);
   document.getElementById('omega-sweep-readout').textContent = state.omegaSweep.toFixed(3);
 
   const poles = poleLocations(zeta, omega0);
@@ -694,12 +694,13 @@ function initControls() {
 }
 
 function resetCamera() {
+  // Bounds are now fixed (normalized), independent of ω₀
   const { sigMin, sigMax, omMin, omMax } = getSurfaceBounds();
   const cx = (sigMin + sigMax) / 2;
   const span = Math.max(sigMax - sigMin, omMax - omMin);
-  camera.position.set(cx, omMin - span * 0.9, span * 0.7);
+  camera.position.set(cx, omMin - span * 0.85, span * 0.65);
   camera.up.set(0, 0, 1);
-  controls.target.set(cx, 0, dbToZ(-20));
+  controls.target.set(cx, 0, dbToZ(-10));
   controls.update();
 }
 
