@@ -51,9 +51,9 @@
       <!-- log scale: value = ln(zeta), displayed = e^value -->
     </div>
     <div class="control-group">
-      <label>ω₀ <span class="readout" id="omega0-readout">1.00</span> <span style="color:var(--muted);font-size:10px">rad/s</span></label>
-      <input type="range" id="omega0-slider" min="-2.303" max="4.605" step="0.001" value="0">
-      <!-- log scale: slider value = ln(ω₀), range 0.1–100 rad/s -->
+      <label>ω₀ <span class="readout" id="omega0-readout">1.00 rad/s</span></label>
+      <input type="range" id="omega0-slider" min="-2.303" max="20.723" step="0.001" value="0">
+      <!-- log scale: slider value = ln(ω₀), range 0.1 rad/s–1 Grad/s -->
     </div>
     <div class="control-group">
       <label>ω sweep
@@ -68,6 +68,7 @@
       <button class="preset-btn" data-zeta="1.0" data-omega="1">Critically Damped</button>
       <button class="preset-btn" data-zeta="2.0" data-omega="1">Overdamped</button>
       <button class="preset-btn" data-zeta="0.079" data-omega="3.1623">ECE 100 P3d</button>
+      <button class="preset-btn" data-zeta="0.707" data-omega="6283185">1 MHz Butterworth</button>
     </div>
     <div class="control-group" id="readouts-group">
       <div class="readout-block">

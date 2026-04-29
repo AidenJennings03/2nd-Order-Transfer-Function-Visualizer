@@ -55,6 +55,29 @@ function poleLocations(zeta, omega0) {
   }
 }
 
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+function formatOmega(w) {
+  const fmt = v => v < 1 ? v.toFixed(3) : v < 10 ? v.toFixed(2) : v.toFixed(1);
+  if (w >= 1e9) return fmt(w / 1e9) + ' Grad/s';
+  if (w >= 1e6) return fmt(w / 1e6) + ' Mrad/s';
+  if (w >= 1e3) return fmt(w / 1e3) + ' krad/s';
+  return fmt(w) + ' rad/s';
+}
+
+function poleScale(omega0) {
+  if (omega0 >= 1e9) return { s: 1e9, unit: 'Grad/s' };
+  if (omega0 >= 1e6) return { s: 1e6, unit: 'Mrad/s' };
+  if (omega0 >= 1e3) return { s: 1e3, unit: 'krad/s' };
+  return { s: 1, unit: 'rad/s' };
+}
+
+function stepTimeScale(tMaxSeconds) {
+  if (tMaxSeconds < 1e-6) return { s: 1e9, unit: 'ns' };
+  if (tMaxSeconds < 1e-3) return { s: 1e6, unit: 'μs' };
+  if (tMaxSeconds < 1)    return { s: 1e3, unit: 'ms' };
+  return { s: 1, unit: 's' };
+}
+
 // ─── Three.js setup ──────────────────────────────────────────────────────────
 const GRID = 150;
 const DB_MIN = -60, DB_MAX = 40;
@@ -529,13 +552,14 @@ function updateBodePlots() {
 let stepInitialized = false;
 
 function computeStepResponse(zeta, omega0) {
-  const tMax = 12 / (zeta * omega0 + 0.01);
+  const tMaxRaw = 12 / (zeta * omega0 + 0.01);
+  const { s: tScale, unit: tUnit } = stepTimeScale(tMaxRaw);
   const N = 600;
-  const dt = tMax / N;
+  const dt = tMaxRaw / N;
   const t = [], y = [];
   for (let i = 0; i <= N; i++) {
     const ti = i * dt;
-    t.push(ti);
+    t.push(ti * tScale);
     let yi;
     if (zeta < 1) {
       const wd = omega0 * Math.sqrt(1 - zeta * zeta);
@@ -550,12 +574,12 @@ function computeStepResponse(zeta, omega0) {
     }
     y.push(yi);
   }
-  return { t, y };
+  return { t, y, tUnit };
 }
 
 function initStepPlot() {
   const { zeta, omega0 } = state;
-  const { t, y } = computeStepResponse(zeta, omega0);
+  const { t, y, tUnit } = computeStepResponse(zeta, omega0);
   const traces = [
     { x: t, y, name: 'Step response', line: { color: '#ff8800', width: 2 }, type: 'scatter', mode: 'lines' },
     { x: [t[t.length - 1]], y: [1], mode: 'lines', name: 'Final value', line: { color: '#6b7090', dash: 'dot', width: 1 }, showlegend: false },
@@ -565,7 +589,7 @@ function initStepPlot() {
     font: { family: 'SF Mono, Fira Code, monospace', size: 11, color: '#e0e4f0' },
     title: { text: 'Step Response', font: { size: 12 }, x: 0.02, xanchor: 'left' },
     margin: { l: 52, r: 14, t: 30, b: 32 },
-    xaxis: { title: { text: 'Time (s)', font: { size: 10 } }, color: '#6b7090', gridcolor: '#1e2030', showgrid: true },
+    xaxis: { title: { text: `Time (${tUnit})`, font: { size: 10 } }, color: '#6b7090', gridcolor: '#1e2030', showgrid: true },
     yaxis: { title: { text: 'y(t)', font: { size: 10 } }, color: '#6b7090', gridcolor: '#1e2030', showgrid: true, zeroline: true, zerolinecolor: '#2a2d3e' },
     showlegend: false,
     shapes: [{
@@ -585,8 +609,9 @@ function updateStepPlot() {
   document.getElementById('plot-step').style.display = '';
   if (!stepInitialized) { initStepPlot(); return; }
   const { zeta, omega0 } = state;
-  const { t, y } = computeStepResponse(zeta, omega0);
+  const { t, y, tUnit } = computeStepResponse(zeta, omega0);
   Plotly.update('plot-step', { x: [t], y: [y] }, {
+    'xaxis.title.text': `Time (${tUnit})`,
     shapes: [{
       type: 'line', x0: 0, x1: t[t.length - 1], y0: 1, y1: 1,
       line: { color: '#2a2d3e', width: 1, dash: 'dot' },
@@ -598,13 +623,15 @@ function updateStepPlot() {
 function updateReadouts() {
   const { zeta, omega0 } = state;
   document.getElementById('zeta-readout').textContent = zeta.toFixed(3);
-  document.getElementById('omega0-readout').textContent = omega0 >= 10 ? omega0.toFixed(1) : omega0.toFixed(3);
-  document.getElementById('omega-sweep-readout').textContent = state.omegaSweep.toFixed(3);
+  document.getElementById('omega0-readout').textContent = formatOmega(omega0);
+  document.getElementById('omega-sweep-readout').textContent = formatOmega(state.omegaSweep);
 
   const poles = poleLocations(zeta, omega0);
+  const { s, unit } = poleScale(omega0);
   const poleStr = poles.map(p => {
-    if (Math.abs(p.omega) < 1e-9) return `${p.sigma.toFixed(3)}`;
-    return `${p.sigma.toFixed(3)} ± j${Math.abs(p.omega).toFixed(3)}`;
+    const re = (p.sigma / s).toFixed(3);
+    if (Math.abs(p.omega) < 1e-9) return `${re} ${unit}`;
+    return `${re} ± j${(Math.abs(p.omega) / s).toFixed(3)} ${unit}`;
   }).join(', ');
   document.getElementById('pole-readout').textContent = poleStr;
 
